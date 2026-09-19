@@ -73,9 +73,17 @@
           body: JSON.stringify(payload),
         });
         const result = await response.json();
-        status.textContent = response.ok
-          ? `Done. Saved to ${result.outputPath}`
-          : `Export failed: ${result.error}`;
+        status.replaceChildren();
+        if (response.ok) {
+          status.append("Export complete: ");
+          const link = document.createElement("a");
+          link.href = result.downloadUrl;
+          link.textContent = "Download JSON";
+          link.download = "discord-export.json";
+          status.append(link, document.createTextNode(`\nSaved on server at ${result.outputPath}`));
+        } else {
+          status.textContent = `Export failed: ${result.error}`;
+        }
       } catch (error) {
         status.textContent = `Export failed: ${error.message}`;
       } finally {
