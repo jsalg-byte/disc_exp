@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discord Message Export</title>
+  <style>
+    :root { color-scheme: light dark; font: 15px system-ui, sans-serif; }
+    body { max-width: 520px; margin: 48px auto; padding: 0 18px; }
+    h1 { font-size: 1.4rem; margin-bottom: 8px; }
+    p { color: #777; margin-top: 0; }
+    form { display: grid; gap: 14px; margin-top: 24px; }
+    label { display: grid; gap: 6px; font-weight: 600; }
+    input, select, button { box-sizing: border-box; width: 100%; padding: 10px; font: inherit; }
+    .check { display: flex; align-items: center; gap: 9px; font-weight: 400; }
+    .check input { width: auto; }
+    button { cursor: pointer; font-weight: 650; }
+    #status { margin-top: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>Discord Message Export</h1>
+  <p>Export one channel or thread to a JSON file in <code>outputs/gui</code>.</p>
+  <form id="export-form">
+    <label>Server ID
+      <input id="guild-id" inputmode="numeric" required autocomplete="off" placeholder="Discord server ID">
+    </label>
+    <label>Export type
+      <select id="target-type"><option value="thread">Thread</option><option value="channel">Channel</option></select>
+    </label>
+    <label id="target-label">Thread ID
+      <input id="target-id" inputmode="numeric" required autocomplete="off" placeholder="Discord thread ID">
+    </label>
+    <label>Message limit
+      <input id="limit" type="number" min="1" max="1000000" value="100000" required>
+    </label>
+    <label class="check"><input id="include-bots" type="checkbox" checked> Include bot messages</label>
+    <button id="submit" type="submit">Export messages</button>
+  </form>
+  <div id="status" role="status" aria-live="polite"></div>
+  <script>
+    const typeSelect = document.querySelector("#target-type");
+    const targetLabel = document.querySelector("#target-label");
+    const targetInput = document.querySelector("#target-id");
+    const status = document.querySelector("#status");
+    const button = document.querySelector("#submit");
+
+    fetch("/api/config").then((response) => response.json()).then((config) => {
+      document.querySelector("#guild-id").value = config.guildId ?? "";
+    }).catch(() => {});
+
+    typeSelect.addEventListener("change", () => {
+      const isThread = typeSelect.value === "thread";
+      targetLabel.firstChild.textContent = `${isThread ? "Thread" : "Channel"} ID`;
+      targetInput.placeholder = `Discord ${isThread ? "thread" : "channel"} ID`;
+    });
+
+    document.querySelector("#export-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      status.textContent = "Export running…";
+      const payload = {
+        guildId: document.querySelector("#guild-id").value.trim(),
+        targetType: typeSelect.value,
+        targetId: targetInput.value.trim(),
+        limit: Number(document.querySelector("#limit").value),
+        includeBots: document.querySelector("#include-bots").checked,
+      };
+      try {
+        const response = await fetch("/api/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        status.textContent = response.ok
+          ? `Done. Saved to ${result.outputPath}`
+          : `Export failed: ${result.error}`;
+      } catch (error) {
+        status.textContent = `Export failed: ${error.message}`;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

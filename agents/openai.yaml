@@ -1,0 +1,4 @@
+interface:
+  display_name: "Discord Server Synth"
+  short_description: "Extract Discord server content for synthesis."
+  default_prompt: "Use $discord-server-synth to export TikTok ad creator Discord channels and synthesize key points, main strategies, and monetization signals."
