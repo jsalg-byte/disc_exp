@@ -32,6 +32,10 @@
     .message-head { display:flex; flex-wrap:wrap; align-items:baseline; column-gap:8px; row-gap:2px; }
     .author { color:#f2f3f5; font-weight:650; }
     .timestamp,.channel-name { color:#949ba4; font-size:11px; }
+    .reply-preview { display:flex; align-items:baseline; gap:5px; min-width:0; margin:0 0 3px; color:#949ba4; font-size:12px; line-height:1.35; }
+    .reply-mark { flex:0 0 auto; color:#72767d; font-size:13px; }
+    .reply-author { flex:0 1 auto; min-width:0; max-width:160px; overflow:hidden; color:#b5bac1; font-size:11px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+    .reply-snippet { flex:1 1 auto; min-width:0; overflow:hidden; color:#949ba4; text-overflow:ellipsis; white-space:nowrap; }
     .message-text { margin:2px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
     .message-extras { display:grid; gap:5px; margin-top:7px; font-size:13px; }
     .message-extras a { overflow-wrap:anywhere; }
@@ -48,6 +52,10 @@
     .theme-nes .message-list { gap:2px; }
     .theme-nes .author { color:#209cee; }
     .theme-nes .timestamp,.theme-nes .channel-name { color:#777; }
+    .theme-nes .reply-preview { color:#777; font-family:system-ui,sans-serif; font-size:10px; }
+    .theme-nes .reply-mark { color:#999; }
+    .theme-nes .reply-author { color:#696570; font-size:9px; }
+    .theme-nes .reply-snippet { color:#777; }
     .theme-nes .theme-button { border:2px solid #212529; border-radius:0; background:#fff; color:#212529; font-family:inherit; font-size:8px; }
     .theme-nes .theme-button[aria-pressed="true"] { background:#209cee; color:#fff; }
     .theme-nes .empty { font:12px system-ui,sans-serif; }
@@ -84,6 +92,7 @@
       dateValue: message.timestamp ? Date.parse(message.timestamp) : 0,
       dayValue: message.timestamp ? message.timestamp.slice(0, 10) : "",
     })));
+    const messagesById = new Map(rows.filter((message) => message.id).map((message) => [message.id, message]));
     const getName = (message) => message.author?.globalName || message.author?.username || message.author?.id || "Unknown user";
     const getUserKey = (message) => message.author?.id || message.author?.username || "unknown";
     const userFilter = document.querySelector("#user-filter");
@@ -92,6 +101,42 @@
     const dateTo = document.querySelector("#date-to");
     const sort = document.querySelector("#sort");
     const list = document.querySelector("#message-list");
+
+    function parseReplyPrefix(content) {
+      const lines = String(content ?? "").split("\n");
+      const header = lines[0] ?? "";
+      const link = header.match(/\[Reply to\]\(<([^>]+)>\)/);
+      if (!link) return null;
+
+      const targetId = link[1].match(/\/channels\/[^/]+\/[^/]+\/(\d+)/)?.[1] ?? null;
+      const mentionedName = header.match(/:\s*@(.+?)\s*\(<@!?\d+>\)\s*$/)?.[1]?.trim() ?? null;
+      const quotedLines = [];
+      let index = 1;
+      while (index < lines.length && lines[index].startsWith(">")) {
+        quotedLines.push(lines[index].replace(/^>\s?/, ""));
+        index += 1;
+      }
+      return {
+        targetId,
+        mentionedName,
+        quote: quotedLines.join(" ").replace(/\s+/g, " ").trim(),
+        body: lines.slice(index).join("\n").trimStart(),
+      };
+    }
+
+    function replyDetails(message) {
+      const parsed = parseReplyPrefix(message.content);
+      if (!parsed && !message.referencedMessageId) return null;
+      const target = messagesById.get(message.referencedMessageId || parsed?.targetId);
+      const targetReply = target ? parseReplyPrefix(target.content) : null;
+      const quotedMessage = targetReply?.body || target?.content || "";
+      const snippet = (quotedMessage || parsed?.quote || "").replace(/\s+/g, " ").trim();
+      return {
+        author: target ? getName(target) : parsed?.mentionedName || "Reply",
+        snippet: snippet.length > 180 ? `${snippet.slice(0, 177).trimEnd()}…` : snippet,
+        body: parsed?.body ?? message.content ?? "",
+      };
+    }
 
     document.title = `${data.guild?.name ?? "Discord"} chat log`;
     document.querySelector("#chat-title").textContent = `${data.guild?.name ?? "Discord server"} — ${channels.length === 1 ? channels[0].name ?? "Chat" : `${channels.length} channels`}`;
@@ -150,10 +195,31 @@
       timestamp.textContent = message.timestamp ? new Date(message.timestamp).toLocaleString() : "Unknown date";
       head.append(timestamp);
       main.append(head);
-      const text = document.createElement("p");
-      text.className = "message-text";
-      text.textContent = message.content || (message.attachments?.length ? "[Attachment]" : "");
-      main.append(text);
+      const reply = replyDetails(message);
+      if (reply) {
+        const preview = document.createElement("div");
+        preview.className = "reply-preview";
+        preview.setAttribute("aria-label", `Reply to ${reply.author}`);
+        const mark = document.createElement("span");
+        mark.className = "reply-mark";
+        mark.setAttribute("aria-hidden", "true");
+        mark.textContent = "↪";
+        const replyAuthor = document.createElement("span");
+        replyAuthor.className = "reply-author";
+        replyAuthor.textContent = reply.author;
+        const snippet = document.createElement("span");
+        snippet.className = "reply-snippet";
+        snippet.textContent = reply.snippet || "Replied message";
+        preview.append(mark, replyAuthor, snippet);
+        main.append(preview);
+      }
+      const visibleContent = reply?.body ?? message.content;
+      if (visibleContent || message.attachments?.length) {
+        const text = document.createElement("p");
+        text.className = "message-text";
+        text.textContent = visibleContent || (message.attachments?.length ? "[Attachment]" : "");
+        main.append(text);
+      }
       const extras = document.createElement("div");
       extras.className = "message-extras";
       for (const attachment of message.attachments ?? []) addExtra(extras, `Attachment: ${attachment.filename ?? "file"}`, attachment.url);
