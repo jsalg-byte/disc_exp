@@ -20,7 +20,8 @@
 </head>
 <body>
   <h1>Discord Message Export</h1>
-  <p>Export one channel or thread to a JSON file in <code>outputs/gui</code>.</p>
+  <p>Export one channel or thread to JSON, an HTML chat log, and a downloadable ZIP.</p>
+  <p><a href="/archives">Browse chat archives and ZIP downloads</a></p>
   <form id="export-form">
     <label>Server ID
       <input id="guild-id" inputmode="numeric" required autocomplete="off" placeholder="Discord server ID">
@@ -75,12 +76,19 @@
         const result = await response.json();
         status.replaceChildren();
         if (response.ok) {
-          status.append("Export complete: ");
-          const link = document.createElement("a");
-          link.href = result.downloadUrl;
-          link.textContent = "Download JSON";
-          link.download = "discord-export.json";
-          status.append(link, document.createTextNode(`\nSaved on server at ${result.outputPath}`));
+          status.append(`${result.archiveTitle} — export complete. `);
+          const viewer = document.createElement("a");
+          viewer.href = result.viewerUrl;
+          viewer.textContent = "Open chat log";
+          const zip = document.createElement("a");
+          zip.href = result.zipDownloadUrl;
+          zip.textContent = "Download ZIP";
+          zip.style.marginLeft = "12px";
+          const json = document.createElement("a");
+          json.href = result.rawDownloadUrl;
+          json.textContent = "Download JSON";
+          json.style.marginLeft = "12px";
+          status.append(viewer, zip, json, document.createTextNode("\nAlso listed on the archive page."));
         } else {
           status.textContent = `Export failed: ${result.error}`;
         }

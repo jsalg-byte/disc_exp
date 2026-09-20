@@ -13,6 +13,10 @@ const projectDir = path.resolve(here, "..");
 const port = Number.parseInt(process.env.PORT ?? process.env.GUI_PORT ?? "4173", 10);
 const bindHost = process.env.HOST ?? "127.0.0.1";
 const html = await fs.readFile(path.join(here, "index.html"), "utf8");
+const archivesHtml = await fs.readFile(path.join(here, "archives.html"), "utf8");
+const exportDataDir = path.resolve(process.env.EXPORT_DATA_DIR ?? path.join(projectDir, "outputs"));
+const exportDir = path.join(exportDataDir, "gui");
+const archiveDir = path.join(exportDataDir, "archives");
 
 function parseEnv(contents) {
   const values = {};
@@ -94,7 +98,7 @@ async function readRequestBody(request) {
 function runExport({ guildId, targetId, targetType, limit, includeBots, credentials }) {
   return new Promise((resolve) => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const outputPath = path.join("outputs", "gui", `${targetType}-${targetId}-${stamp}.json`);
+    const outputPath = path.join(exportDir, `${targetType}-${targetId}-${stamp}.json`);
     const scriptPath = path.join(projectDir, "scripts", "export-discord-server.mjs");
     const args = [
       scriptPath,
@@ -120,9 +124,24 @@ function runExport({ guildId, targetId, targetType, limit, includeBots, credenti
     child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
     child.stderr.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
     child.on("error", (error) => resolve({ ok: false, error: error.message }));
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       if (code === 0) {
-        resolve({ ok: true, outputPath, message: stdout.trim() });
+        try {
+          const archiveLine = stdout.split(/\r?\n/).find((line) => line.startsWith("CHAT_ARCHIVE "));
+          if (!archiveLine) throw new Error("Exporter did not return archive details.");
+          const archive = JSON.parse(archiveLine.slice("CHAT_ARCHIVE ".length));
+          resolve({
+            ok: true,
+            outputPath,
+            message: stdout.trim(),
+            archiveTitle: archive.title,
+            zipDownloadUrl: `/api/archive-download?file=${encodeURIComponent(archive.file)}`,
+            viewerUrl: `/api/archive-viewer?file=${encodeURIComponent(archive.viewerFile)}`,
+            rawDownloadUrl: `/api/download?file=${encodeURIComponent(path.basename(outputPath))}`,
+          });
+        } catch (error) {
+          resolve({ ok: false, error: `JSON exported, but chat archive creation failed: ${error.message}` });
+        }
       } else {
         resolve({ ok: false, error: (stderr || stdout || `Exporter exited with code ${code}.`).trim() });
       }
@@ -143,9 +162,87 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (request.method === "GET" && requestUrl.pathname === "/archives") {
+    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    response.end(archivesHtml);
+    return;
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/config") {
     const credentials = await loadCredentials();
     sendJson(response, 200, { guildId: credentials.DISCORD_GUILD_ID ?? "" });
+    return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/archives") {
+    try {
+      const files = await fs.readdir(archiveDir, { withFileTypes: true });
+      const records = await Promise.all(files
+        .filter((file) => file.isFile() && /^export-[a-z0-9-]+-[a-f0-9]{8}\.meta\.json$/.test(file.name))
+        .map(async (file) => {
+          try {
+            const metadata = JSON.parse(await fs.readFile(path.join(archiveDir, file.name), "utf8"));
+            await fs.access(path.join(archiveDir, metadata.file));
+            await fs.access(path.join(archiveDir, metadata.viewerFile));
+            return {
+              title: metadata.title,
+              serverName: metadata.serverName,
+              targetTitle: metadata.targetTitle,
+              targetType: metadata.targetType,
+              totalMessages: metadata.totalMessages,
+              channelCount: metadata.channelCount,
+              generatedAt: metadata.generatedAt,
+              file: metadata.file,
+              viewerFile: metadata.viewerFile,
+            };
+          } catch {
+            return null;
+          }
+        }));
+      records.sort((a, b) => (b?.generatedAt ?? "").localeCompare(a?.generatedAt ?? ""));
+      sendJson(response, 200, records.filter(Boolean));
+    } catch (error) {
+      if (error.code === "ENOENT") sendJson(response, 200, []);
+      else sendJson(response, 500, { error: "Unable to load archives." });
+    }
+    return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/archive-download") {
+    const filename = requestUrl.searchParams.get("file") ?? "";
+    if (!/^export-[a-z0-9-]+-[a-f0-9]{8}\.zip$/.test(filename)) {
+      sendJson(response, 400, { error: "Invalid archive file name." });
+      return;
+    }
+    try {
+      const filePath = path.join(archiveDir, filename);
+      const stat = await fs.stat(filePath);
+      response.writeHead(200, {
+        "Content-Type": "application/zip",
+        "Content-Length": stat.size,
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      });
+      createReadStream(filePath).on("error", () => response.destroy()).pipe(response);
+    } catch (error) {
+      sendJson(response, error.code === "ENOENT" ? 404 : 500, { error: "Archive file not found." });
+    }
+    return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/archive-viewer") {
+    const filename = requestUrl.searchParams.get("file") ?? "";
+    if (!/^export-[a-z0-9-]+-[a-f0-9]{8}\.html$/.test(filename)) {
+      sendJson(response, 400, { error: "Invalid viewer file name." });
+      return;
+    }
+    try {
+      const viewer = await fs.readFile(path.join(archiveDir, filename), "utf8");
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      response.end(viewer);
+    } catch (error) {
+      sendJson(response, error.code === "ENOENT" ? 404 : 500, { error: "Viewer file not found." });
+    }
     return;
   }
 
@@ -155,7 +252,7 @@ const server = createServer(async (request, response) => {
       sendJson(response, 400, { error: "Invalid export file name." });
       return;
     }
-    const filePath = path.join(projectDir, "outputs", "gui", filename);
+    const filePath = path.join(exportDir, filename);
     try {
       const stat = await fs.stat(filePath);
       response.writeHead(200, {
@@ -214,9 +311,6 @@ const server = createServer(async (request, response) => {
       return;
     }
     const result = await runExport({ ...body, limit, credentials });
-    if (result.ok) {
-      result.downloadUrl = `/api/download?file=${encodeURIComponent(path.basename(result.outputPath))}`;
-    }
     sendJson(response, result.ok ? 200 : 500, result);
   } catch (error) {
     sendJson(response, 400, { error: error.message });

@@ -3,6 +3,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { createChatArchive } from "./chat-archive.mjs";
 
 const API_BASE = "https://discord.com/api/v10";
 const MESSAGE_CHANNEL_TYPES = new Set([0, 5, 10, 11, 12]);
@@ -387,6 +388,9 @@ async function main() {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, "utf8");
   console.log(`Wrote Discord export: ${outputPath}`);
+  const dataDir = path.resolve(process.env.EXPORT_DATA_DIR ?? "./outputs");
+  const archive = await createChatArchive(outputPath, path.join(dataDir, "archives"));
+  console.log(`CHAT_ARCHIVE ${JSON.stringify(archive)}`);
 }
 
 main().catch((error) => {

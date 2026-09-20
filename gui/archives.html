@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discord chat archives</title>
+  <style>
+    :root { color-scheme: light dark; font: 15px system-ui, sans-serif; }
+    body { max-width: 780px; margin: 44px auto; padding: 0 18px; }
+    h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    .intro,#empty { color:#777; }
+    .archive { border:1px solid #7775; border-radius:7px; margin:12px 0; padding:15px; }
+    .archive h2 { font-size:1rem; margin:0 0 5px; overflow-wrap:anywhere; }
+    .meta { color:#888; font-size:.85rem; margin:0 0 11px; }
+    .actions { display:flex; gap:14px; flex-wrap:wrap; }
+    .actions a { font-weight:600; }
+  </style>
+</head>
+<body>
+  <p><a href="/">← Back to exporter</a></p>
+  <h1>Chat archives</h1>
+  <p class="intro">Open a chat log in the browser or download a ZIP containing the HTML viewer and raw JSON.</p>
+  <main id="archives" aria-live="polite"><p id="empty">Loading archives…</p></main>
+  <script>
+    const root = document.querySelector("#archives");
+    fetch("/api/archives").then(async (response) => {
+      if (!response.ok) throw new Error("Unable to load archive list.");
+      return response.json();
+    }).then((items) => {
+      root.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement("p");
+        empty.id = "empty";
+        empty.textContent = "No chat archives yet.";
+        root.append(empty);
+        return;
+      }
+      for (const item of items) {
+        const card = document.createElement("article");
+        card.className = "archive";
+        const title = document.createElement("h2");
+        title.textContent = item.title;
+        const meta = document.createElement("p");
+        meta.className = "meta";
+        const date = item.generatedAt ? new Date(item.generatedAt).toLocaleString() : "Date unavailable";
+        meta.textContent = `${item.totalMessages.toLocaleString()} messages · ${item.channelCount} channel(s) · ${date}`;
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const viewer = document.createElement("a");
+        viewer.href = `/api/archive-viewer?file=${encodeURIComponent(item.viewerFile)}`;
+        viewer.textContent = "Open chat log";
+        const zip = document.createElement("a");
+        zip.href = `/api/archive-download?file=${encodeURIComponent(item.file)}`;
+        zip.textContent = "Download ZIP";
+        zip.download = item.file;
+        actions.append(viewer, zip);
+        card.append(title, meta, actions);
+        root.append(card);
+      }
+    }).catch((error) => {
+      root.replaceChildren();
+      const message = document.createElement("p");
+      message.id = "empty";
+      message.textContent = error.message;
+      root.append(message);
+    });
+  </script>
+</body>
+</html>

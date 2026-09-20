@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discord chat log</title>
+  <link rel="stylesheet" href="https://unpkg.com/nes.css@2.3.0/css/nes.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #313338; color: #dbdee1; font: 15px/1.5 system-ui, sans-serif; }
+    a { color: #00a8fc; }
+    .page { width: min(100%, 1050px); margin: 0 auto; padding: 24px 16px 48px; }
+    .topbar { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:20px; }
+    .title { margin:0; font-size:22px; font-weight:700; overflow-wrap:anywhere; }
+    .subtitle { margin:4px 0 0; color:#aeb0b5; font-size:13px; }
+    .theme-buttons { display:flex; gap:8px; }
+    .theme-button { border:1px solid #4e5058; border-radius:4px; background:#383a40; color:#dbdee1; padding:7px 10px; cursor:pointer; }
+    .theme-button[aria-pressed="true"] { border-color:#5865f2; background:#4752c4; color:white; }
+    .toolbar { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; padding:14px; border-radius:8px; background:#2b2d31; margin-bottom:14px; }
+    .field { display:grid; gap:5px; color:#b5bac1; font-size:12px; font-weight:700; }
+    .field input,.field select { width:100%; min-height:36px; border:1px solid #1e1f22; border-radius:4px; background:#1e1f22; color:#f2f3f5; padding:7px 9px; font:inherit; }
+    .result-count { margin:10px 4px; color:#aeb0b5; font-size:13px; }
+    .message-list { display:grid; gap:2px; }
+    article.message { display:flex; gap:14px; padding:9px 12px; border-radius:4px; background:transparent; }
+    article.message:hover { background:#2e3035; }
+    .avatar { flex:0 0 38px; width:38px; height:38px; display:grid; place-items:center; border-radius:50%; background:#5865f2; color:white; font-weight:700; }
+    .message-main { min-width:0; flex:1; }
+    .message-head { display:flex; flex-wrap:wrap; align-items:baseline; column-gap:8px; row-gap:2px; }
+    .author { color:#f2f3f5; font-weight:650; }
+    .timestamp,.channel-name { color:#949ba4; font-size:11px; }
+    .message-text { margin:2px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .message-extras { display:grid; gap:5px; margin-top:7px; font-size:13px; }
+    .message-extras a { overflow-wrap:anywhere; }
+    .empty { padding:24px; color:#aeb0b5; text-align:center; }
+    body.theme-nes { background:#f7f2e8; color:#212529; font-family:'Press Start 2P',monospace; font-size:10px; }
+    .theme-nes .page { width:min(100%,1100px); }
+    .theme-nes .title { font-size:15px; line-height:1.8; }
+    .theme-nes .subtitle,.theme-nes .result-count { color:#5c5960; font-size:9px; line-height:1.8; }
+    .theme-nes .toolbar { grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:15px; background:#fff; border:4px solid #212529; border-radius:0; }
+    .theme-nes .field { color:#212529; font-size:8px; line-height:1.8; }
+    .theme-nes .field input,.theme-nes .field select { background:#fff; color:#212529; border:2px solid #212529; border-radius:0; font-family:inherit; font-size:10px; }
+    .theme-nes article.message { display:flex; margin:8px 0; padding:13px; background:#fff; border-radius:0; font-family:system-ui,sans-serif; font-size:14px; }
+    .theme-nes article.message:hover { background:#fff; }
+    .theme-nes .message-list { gap:2px; }
+    .theme-nes .author { color:#209cee; }
+    .theme-nes .timestamp,.theme-nes .channel-name { color:#777; }
+    .theme-nes .theme-button { border:2px solid #212529; border-radius:0; background:#fff; color:#212529; font-family:inherit; font-size:8px; }
+    .theme-nes .theme-button[aria-pressed="true"] { background:#209cee; color:#fff; }
+    .theme-nes .empty { font:12px system-ui,sans-serif; }
+    @media (max-width:550px) { .topbar { align-items:flex-start; flex-direction:column; } article.message { gap:9px; padding:8px 4px; } .avatar { flex-basis:32px; width:32px; height:32px; } }
+  </style>
+</head>
+<body class="theme-discord min-h-screen bg-[#313338] text-[#dbdee1]">
+  <main class="page mx-auto max-w-5xl px-4 py-6">
+    <header class="topbar">
+      <div><h1 id="chat-title" class="title">Discord chat log</h1><p id="chat-subtitle" class="subtitle"></p></div>
+      <div class="theme-buttons" role="group" aria-label="Chat log style">
+        <button class="theme-button" type="button" data-theme="discord" aria-pressed="true">Discord</button>
+        <button class="theme-button" type="button" data-theme="nes" aria-pressed="false">NES.css</button>
+      </div>
+    </header>
+    <section class="toolbar" aria-label="Search and filters">
+      <label class="field">Search text or user<input id="search" type="search" placeholder="Search messages or names"></label>
+      <label class="field">User<select id="user-filter"><option value="">All users</option></select></label>
+      <label class="field">From date<input id="date-from" type="date"></label>
+      <label class="field">To date<input id="date-to" type="date"></label>
+      <label class="field">Sort by date<select id="sort"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select></label>
+    </section>
+    <p id="result-count" class="result-count" aria-live="polite"></p>
+    <section id="message-list" class="message-list" aria-label="Messages"></section>
+  </main>
+  <script id="export-data" type="application/json">__EXPORT_JSON_DATA__</script>
+  <script>
+    const data = JSON.parse(document.querySelector("#export-data").textContent);
+    const channels = Array.isArray(data.channels) ? data.channels : [];
+    const rows = channels.flatMap((channel) => (channel.messages ?? []).map((message) => ({
+      ...message,
+      channelName: channel.name ?? channel.id ?? "Unknown channel",
+      channelId: message.channelId ?? channel.id ?? "",
+      dateValue: message.timestamp ? Date.parse(message.timestamp) : 0,
+      dayValue: message.timestamp ? message.timestamp.slice(0, 10) : "",
+    })));
+    const getName = (message) => message.author?.globalName || message.author?.username || message.author?.id || "Unknown user";
+    const getUserKey = (message) => message.author?.id || message.author?.username || "unknown";
+    const userFilter = document.querySelector("#user-filter");
+    const search = document.querySelector("#search");
+    const dateFrom = document.querySelector("#date-from");
+    const dateTo = document.querySelector("#date-to");
+    const sort = document.querySelector("#sort");
+    const list = document.querySelector("#message-list");
+
+    document.title = `${data.guild?.name ?? "Discord"} chat log`;
+    document.querySelector("#chat-title").textContent = `${data.guild?.name ?? "Discord server"} — ${channels.length === 1 ? channels[0].name ?? "Chat" : `${channels.length} channels`}`;
+    const dateBounds = rows.reduce((bounds, row) => {
+      if (!row.dateValue) return bounds;
+      bounds.min = Math.min(bounds.min, row.dateValue);
+      bounds.max = Math.max(bounds.max, row.dateValue);
+      return bounds;
+    }, { min: Infinity, max: -Infinity });
+    const dateLabel = Number.isFinite(dateBounds.min) ? `${new Date(dateBounds.min).toLocaleDateString()} – ${new Date(dateBounds.max).toLocaleDateString()}` : "No message dates";
+    document.querySelector("#chat-subtitle").textContent = `${rows.length.toLocaleString()} messages · ${dateLabel} · Raw data is included as messages.json`;
+
+    const users = new Map();
+    for (const message of rows) {
+      const key = getUserKey(message);
+      if (!users.has(key)) users.set(key, getName(message));
+    }
+    for (const [key, name] of [...users].sort((a, b) => a[1].localeCompare(b[1]))) {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = name;
+      userFilter.append(option);
+    }
+
+    function addExtra(container, text, url) {
+      const item = document.createElement(url ? "a" : "div");
+      item.textContent = text;
+      if (url) { item.href = url; item.target = "_blank"; item.rel = "noopener noreferrer"; }
+      container.append(item);
+    }
+
+    let activeTheme = "discord";
+    function renderMessage(message) {
+      const article = document.createElement("article");
+      article.className = `message${activeTheme === "nes" ? " nes-container is-rounded" : ""}`;
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = getName(message).slice(0, 1).toUpperCase();
+      const main = document.createElement("div");
+      main.className = "message-main";
+      const head = document.createElement("div");
+      head.className = "message-head";
+      const author = document.createElement("span");
+      author.className = "author";
+      author.textContent = getName(message);
+      head.append(author);
+      if (channels.length > 1) {
+        const channel = document.createElement("span");
+        channel.className = "channel-name";
+        channel.textContent = `# ${message.channelName}`;
+        head.append(channel);
+      }
+      const timestamp = document.createElement("time");
+      timestamp.className = "timestamp";
+      timestamp.dateTime = message.timestamp ?? "";
+      timestamp.textContent = message.timestamp ? new Date(message.timestamp).toLocaleString() : "Unknown date";
+      head.append(timestamp);
+      main.append(head);
+      const text = document.createElement("p");
+      text.className = "message-text";
+      text.textContent = message.content || (message.attachments?.length ? "[Attachment]" : "");
+      main.append(text);
+      const extras = document.createElement("div");
+      extras.className = "message-extras";
+      for (const attachment of message.attachments ?? []) addExtra(extras, `Attachment: ${attachment.filename ?? "file"}`, attachment.url);
+      for (const embed of message.embeds ?? []) {
+        const label = [embed.title, embed.description].filter(Boolean).join(" — ") || "Embed";
+        addExtra(extras, label, embed.url);
+      }
+      if (message.jumpUrl) addExtra(extras, "Open in Discord", message.jumpUrl);
+      if (extras.childElementCount) main.append(extras);
+      article.append(avatar, main);
+      return article;
+    }
+
+    function render() {
+      const query = search.value.trim().toLocaleLowerCase();
+      const selectedUser = userFilter.value;
+      const from = dateFrom.value;
+      const to = dateTo.value;
+      const filtered = rows.filter((message) => {
+        if (selectedUser && getUserKey(message) !== selectedUser) return false;
+        if (from && (!message.dayValue || message.dayValue < from)) return false;
+        if (to && (!message.dayValue || message.dayValue > to)) return false;
+        if (query && !`${getName(message)} ${message.author?.username ?? ""} ${message.content ?? ""}`.toLocaleLowerCase().includes(query)) return false;
+        return true;
+      }).sort((a, b) => sort.value === "asc" ? a.dateValue - b.dateValue : b.dateValue - a.dateValue);
+      list.replaceChildren();
+      for (const message of filtered) list.append(renderMessage(message));
+      document.querySelector("#result-count").textContent = `Showing ${filtered.length.toLocaleString()} of ${rows.length.toLocaleString()} messages`;
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No messages match these filters.";
+        list.append(empty);
+      }
+    }
+
+    for (const control of [search, userFilter, dateFrom, dateTo, sort]) control.addEventListener("input", render);
+    userFilter.addEventListener("change", render);
+    sort.addEventListener("change", render);
+    document.querySelectorAll("[data-theme]").forEach((button) => button.addEventListener("click", () => {
+      const theme = button.dataset.theme;
+      activeTheme = theme;
+      document.body.classList.toggle("theme-nes", theme === "nes");
+      document.body.classList.toggle("theme-discord", theme === "discord");
+      document.querySelectorAll("[data-theme]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+      render();
+    }));
+    render();
+  </script>
+</body>
+</html>
