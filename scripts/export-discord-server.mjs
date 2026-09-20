@@ -142,6 +142,7 @@ function normalizeMessage(raw) {
       filename: attachment.filename,
       size: attachment.size,
       url: attachment.url,
+      proxyUrl: attachment.proxy_url ?? null,
       contentType: attachment.content_type ?? null,
     })),
     embeds: (raw.embeds ?? []).map((embed) => ({
@@ -149,6 +150,9 @@ function normalizeMessage(raw) {
       title: embed.title ?? null,
       description: embed.description ?? null,
       url: embed.url ?? null,
+      imageUrl: embed.image?.proxy_url ?? embed.image?.url ?? null,
+      thumbnailUrl: embed.thumbnail?.proxy_url ?? embed.thumbnail?.url ?? null,
+      videoUrl: embed.video?.url ?? null,
     })),
     reactions: (raw.reactions ?? []).map((reaction) => ({
       emoji: reaction.emoji?.name ?? reaction.emoji?.id ?? "unknown",

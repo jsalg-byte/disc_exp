@@ -82,13 +82,20 @@
           viewer.textContent = "Open chat log";
           const zip = document.createElement("a");
           zip.href = result.zipDownloadUrl;
-          zip.textContent = "Download ZIP";
+          zip.textContent = "Download ZIP (messages only)";
           zip.style.marginLeft = "12px";
+          const mediaZip = document.createElement("a");
+          mediaZip.href = result.mediaZipDownloadUrl;
+          mediaZip.textContent = "Download ZIP with media";
+          mediaZip.style.marginLeft = "12px";
+          mediaZip.addEventListener("click", (downloadEvent) => {
+            if (!window.confirm("Fetch this export's attachments from Discord now and download a media ZIP? Large exports can be several gigabytes. The media is not stored on the server.")) downloadEvent.preventDefault();
+          });
           const json = document.createElement("a");
           json.href = result.rawDownloadUrl;
           json.textContent = "Download JSON";
           json.style.marginLeft = "12px";
-          status.append(viewer, zip, json, document.createTextNode("\nAlso listed on the archive page."));
+          status.append(viewer, zip, mediaZip, json, document.createTextNode("\nAttachments are fetched when requested and are not saved on the server."));
         } else {
           status.textContent = `Export failed: ${result.error}`;
         }

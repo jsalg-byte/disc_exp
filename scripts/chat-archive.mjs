@@ -183,6 +183,7 @@ export async function createChatArchive(inputPath, archiveDir) {
     file: zipName,
     viewerFile: viewerName,
     sourceFile: path.basename(inputPath),
+    sourcePath: path.relative(path.resolve(archiveDir, ".."), path.resolve(inputPath)).split(path.sep).join("/"),
     generatedAt: details.generatedAt,
   };
   await atomicWrite(path.join(archiveDir, zipName), archive);

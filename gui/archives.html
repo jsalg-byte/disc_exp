@@ -19,7 +19,7 @@
 <body>
   <p><a href="/">← Back to exporter</a></p>
   <h1>Chat archives</h1>
-  <p class="intro">Open a chat log in the browser or download a ZIP containing the HTML viewer and raw JSON.</p>
+  <p class="intro">Attachments are not kept on the server. Click <strong>Download ZIP with media</strong> to fetch them again and put them directly into a ZIP saved to your device. Large exports can be several gigabytes. Profile pictures use letter initials.</p>
   <main id="archives" aria-live="polite"><p id="empty">Loading archives…</p></main>
   <script>
     const root = document.querySelector("#archives");
@@ -51,9 +51,16 @@
         viewer.textContent = "Open chat log";
         const zip = document.createElement("a");
         zip.href = `/api/archive-download?file=${encodeURIComponent(item.file)}`;
-        zip.textContent = "Download ZIP";
+        zip.textContent = "Download ZIP (messages only)";
         zip.download = item.file;
-        actions.append(viewer, zip);
+        const mediaZip = document.createElement("a");
+        mediaZip.href = `/api/archive-with-media?file=${encodeURIComponent(item.file)}`;
+        mediaZip.textContent = "Download ZIP with media";
+        mediaZip.download = item.file.replace(/\.zip$/i, "-with-media.zip");
+        mediaZip.addEventListener("click", (event) => {
+          if (!window.confirm("Fetch this export's attachments from Discord now and download a media ZIP? The media is streamed to your device and is not stored on the server.")) event.preventDefault();
+        });
+        actions.append(viewer, zip, mediaZip);
         card.append(title, meta, actions);
         root.append(card);
       }
